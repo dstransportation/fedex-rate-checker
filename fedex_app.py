@@ -67,7 +67,7 @@ def get_list_rates(origin_zip, dest_zip, weight_lb):
     }
 
     try:
-        response = requests.post("https://apis.fedex.com/rate/v1/rates/quotes",headers=headers,json=body)
+        response = requests.post("https://apis.fedex.com/rate/v1/rates/quotes", headers=headers, json=body)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
@@ -77,8 +77,7 @@ def extract_selected_rates(response):
     results = {}
     rate_details = response.get("output", {}).get("rateReplyDetails", [])
     for item in rate_details:
-        service_type = item.get("serviceType", "Unknown Service")
-        service_name = item.get("serviceName", service_type)
+        service_name = item.get("serviceName", "Unknown Service")
         for detail in item.get("ratedShipmentDetails", []):
             if detail.get("rateType") == "LIST":
                 charge = detail.get("totalNetChargeWithDutiesAndTaxes", {})
@@ -127,4 +126,3 @@ if submitted:
             except Exception:
                 st.write("Raw response:")
                 st.write(response)
-
