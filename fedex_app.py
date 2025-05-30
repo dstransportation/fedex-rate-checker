@@ -1,10 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Fri May 30 09:15:10 2025
-
-@author: mikeand
-"""
-
 import streamlit as st
 import requests
 import os
@@ -18,7 +11,7 @@ ACCOUNT_NUMBER = os.getenv("FEDEX_ACCOUNT_NUMBER", "YOUR_FEDEX_ACCOUNT_NUMBER")
 
 # --- Helper Functions ---
 def get_access_token():
-    url = "https://apis-sandbox.fedex.com/oauth/token"
+    url = "https://apis.fedex.com/oauth/token"
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
     data = {
         "grant_type": "client_credentials",
@@ -60,6 +53,7 @@ def get_list_rates(origin_zip, dest_zip, weight_lb):
                 }
             },
             "pickupType": "DROPOFF_AT_FEDEX_LOCATION",
+            "packagingType": "YOUR_PACKAGING",
             "rateRequestType": ["LIST"],
             "requestedPackageLineItems": [
                 {
@@ -73,31 +67,25 @@ def get_list_rates(origin_zip, dest_zip, weight_lb):
     }
 
     try:
-        response = requests.post("https://apis-sandbox.fedex.com/rate/v1/rates/quotes", headers=headers, json=body)
+        response = requests.post("https://apis.fedex.com/rate/v1/rates/quotes", ...)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
         return {"error": f"API request failed: {e}"}
 
 def extract_selected_rates(response):
-    services = {
-        "FEDEX_GROUND": "FedEx Ground",
-        "FEDEX_2_DAY": "FedEx 2Day",
-        "STANDARD_OVERNIGHT": "FedEx Standard Overnight"
-    }
     results = {}
-
     rate_details = response.get("output", {}).get("rateReplyDetails", [])
     for item in rate_details:
-        service_type = item.get("serviceType")
-        if service_type in services:
-            for detail in item.get("ratedShipmentDetails", []):
-                if detail.get("rateType") == "LIST":
-                    charge = detail.get("totalNetChargeWithDutiesAndTaxes", {})
-                    amount = charge.get("amount")
-                    currency = charge.get("currency")
-                    if amount and currency:
-                        results[services[service_type]] = f"{amount} {currency}"
+        service_type = item.get("serviceType", "Unknown Service")
+        service_name = item.get("serviceName", service_type)
+        for detail in item.get("ratedShipmentDetails", []):
+            if detail.get("rateType") == "LIST":
+                charge = detail.get("totalNetChargeWithDutiesAndTaxes", {})
+                amount = charge.get("amount")
+                currency = charge.get("currency")
+                if amount and currency:
+                    results[service_name] = f"{amount} {currency}"
     return results
 
 # --- Streamlit UI ---
@@ -117,8 +105,26 @@ if submitted:
     else:
         rates = extract_selected_rates(response)
         if rates:
-            st.success("Here are the available rates:")
+            st.success("Here are the available list rates:")
             for service, price in rates.items():
                 st.write(f"**{service}**: {price}")
         else:
             st.warning("No matching list rates returned for the specified inputs.")
+
+        # Show FedEx alerts if available
+        alerts = response.get("output", {}).get("alerts", [])
+        if alerts:
+            st.info("FedEx API Alerts:")
+            for alert in alerts:
+                code = alert.get("code")
+                message = alert.get("message")
+                st.write(f"- ({code}) {message}")
+
+        # Always show the raw FedEx response for debugging
+        with st.expander("See full FedEx API response"):
+            try:
+                st.json(response)
+            except Exception:
+                st.write("Raw response:")
+                st.write(response)
+
