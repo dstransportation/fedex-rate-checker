@@ -67,7 +67,7 @@ def get_list_rates(origin_zip, dest_zip, weight_lb):
     }
 
     try:
-        response = requests.post("https://apis.fedex.com/rate/v1/rates/quotes", ...)
+        response = requests.post("https://apis.fedex.com/rate/v1/rates/quotes",headers=headers,json=body)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
