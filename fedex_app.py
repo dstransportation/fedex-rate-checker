@@ -127,7 +127,7 @@ if submitted:
         if rates:
             st.success("Here are the available list rates:")
             df = pd.DataFrame(rates)
-            st.table(df)
+            st.table(df.set_index("Service"))
         else:
             st.warning("No matching list rates returned for the specified inputs.")
 
