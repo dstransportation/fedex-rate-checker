@@ -80,7 +80,7 @@ def extract_selected_rates(response):
         service_name = item.get("serviceName", item.get("serviceType", "Unknown Service"))
         for detail in item.get("ratedShipmentDetails", []):
             if detail.get("rateType") == "LIST":
-                charge = detail.get("shipmentRateDetail", {}).get("totalNetCharge", {})
+                charge = detail.get("shipmentRateDetail", {}).get("totalNetFedExCharge", {})
                 amount = charge.get("amount")
                 currency = charge.get("currency")
                 if amount and currency:
