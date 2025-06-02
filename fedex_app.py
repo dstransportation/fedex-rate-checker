@@ -120,9 +120,11 @@ def get_list_rates(origin_zip, dest_zip, weight_lb, length, width, height):
         return {"error": f"API request failed: {e}"}
 
 def extract_selected_rates(response, transit_estimates):
+    st.write("🧭 Transit Estimates Raw:", transit_estimates)
     results = []
     rate_details = response.get("output", {}).get("rateReplyDetails", [])
     for item in rate_details:
+        st.write("🔑 serviceType:", item.get("serviceType"))
         service_name = item.get("serviceName") or item.get("serviceType") or "Unknown Service"
         for detail in item.get("ratedShipmentDetails", []):
             charge = detail.get("totalNetFedExCharge")
