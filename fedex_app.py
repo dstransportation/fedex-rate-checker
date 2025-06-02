@@ -27,6 +27,8 @@ def get_access_token():
         st.error(f"OAuth error: {e}")
         return None
 
+from datetime import date
+
 def get_list_rates(origin_zip, dest_zip, weight_lb, length, width, height):
     token = get_access_token()
     if not token:
@@ -39,6 +41,7 @@ def get_list_rates(origin_zip, dest_zip, weight_lb, length, width, height):
 
     body = {
         "accountNumber": {"value": ACCOUNT_NUMBER},
+        "shipDate": date.today().isoformat(),
         "requestedShipment": {
             "shipper": {
                 "address": {
@@ -103,7 +106,7 @@ def extract_selected_rates(response):
 
             if amount and currency:
                 estimated = item.get("commit", {}).get("dateDetail", {}).get("estimatedDeliveryDateTime") or item.get("operationalDetail", {}).get("deliveryDate") or "N/A"
-                results.append({"Service": service_name, "Price": f"{amount} {currency}", "Estimated Delivery": estimated if estimated else "Estimate unavailable"})
+                results.append({"Service": service_name, "Price": f"{amount} {currency}", "Estimated Delivery": item.get("operationalDetail", {}).get("deliveryDate", "Estimate unavailable")})
     return results
 
 # --- Streamlit UI ---
