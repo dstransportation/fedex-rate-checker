@@ -102,7 +102,8 @@ def extract_selected_rates(response):
                 currency = None
 
             if amount and currency:
-                results.append({"Service": service_name, "Price": f"{amount} {currency}"})
+                estimated = item.get("commit", {}).get("dateDetail", {}).get("estimatedDeliveryDateTime") or item.get("operationalDetail", {}).get("deliveryDate") or "N/A"
+                results.append({"Service": service_name, "Price": f"{amount} {currency}", "Estimated Delivery": estimated})
     return results
 
 # --- Streamlit UI ---
