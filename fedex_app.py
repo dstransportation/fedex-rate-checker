@@ -27,8 +27,8 @@ def get_transit_times(origin_zip, dest_zip, origin_state, dest_state):
     body = {
         "accountNumber": {"value": ACCOUNT_NUMBER},
         "requestedShipment": {
-            "shipper": {"address": {"postalCode": origin_zip, "countryCode": "US"}},
-            "recipient": {"address": {"postalCode": dest_zip, "countryCode": "US"}},
+            "shipper": {"address": {"postalCode": origin_zip, "stateOrProvinceCode": origin_state, "countryCode": "US"}},
+            "recipient": {"address": {"postalCode": dest_zip, "stateOrProvinceCode": dest_state, "countryCode": "US"}},
             "pickupType": "DROPOFF_AT_FEDEX_LOCATION",
             "shipDate": date.today().isoformat()
         }
