@@ -81,7 +81,7 @@ def get_list_rates(origin_zip, dest_zip, weight_lb, length, width, height):
         return {"error": f"API request failed: {e}"}
 
 def extract_selected_rates(response):
-    rows = []
+    results = []
     rate_details = response.get("output", {}).get("rateReplyDetails", [])
     for item in rate_details:
         service_name = item.get("serviceName") or item.get("serviceType") or "Unknown Service"
@@ -102,8 +102,8 @@ def extract_selected_rates(response):
                 currency = None
 
             if amount and currency:
-                rows.append({"Service": service_name, "Price": f"{amount} {currency}"})
-    return rows
+                results.append({"Service": service_name, "Price": f"{amount} {currency}"})
+    return results
 
 # --- Streamlit UI ---
 st.title("📦 FedEx Rate Checker")
@@ -127,8 +127,8 @@ if submitted:
         if rates:
             st.success("Here are the available list rates:")
             df = pd.DataFrame(rates)
-df["Numeric"] = df["Price"].str.extract(r'(\d+\.\d+)').astype(float)
-df = df.sort_values(by="Numeric").drop(columns="Numeric")
+            df["Numeric"] = df["Price"].str.extract(r'(\d+\.\d+)').astype(float)
+            df = df.sort_values(by="Numeric").drop(columns="Numeric")
             st.table(df.set_index("Service"))
         else:
             st.warning("No matching list rates returned for the specified inputs.")
