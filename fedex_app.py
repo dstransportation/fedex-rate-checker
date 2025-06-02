@@ -81,15 +81,20 @@ def extract_selected_rates(response):
         st.write(f"🧪 Checking: {service_name}")
 
         for detail in item.get("ratedShipmentDetails", []):
-            # First try the documented location
             charge = detail.get("totalNetFedExCharge")
             if not charge:
-                # Then try inside shipmentRateDetail
                 shipment_detail = detail.get("shipmentRateDetail") or {}
                 charge = shipment_detail.get("totalNetFedExCharge")
 
-            amount = charge.get("amount") if charge else None
-            currency = charge.get("currency") if charge else None
+            if isinstance(charge, dict):
+                amount = charge.get("amount")
+                currency = charge.get("currency")
+            elif isinstance(charge, (int, float)):
+                amount = charge
+                currency = "USD"
+            else:
+                amount = None
+                currency = None
 
             if amount and currency:
                 rate_display = f"{amount} {currency}"
