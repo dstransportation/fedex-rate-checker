@@ -14,6 +14,7 @@ ACCOUNT_NUMBER = os.getenv("FEDEX_ACCOUNT_NUMBER", "YOUR_FEDEX_ACCOUNT_NUMBER")
 # --- Helper Functions ---
 
 def get_transit_times(origin_zip, dest_zip):
+    st.write("📡 Calling FedEx Transit Times API")
     token = get_access_token()
     if not token:
         return {}
@@ -39,10 +40,11 @@ def get_transit_times(origin_zip, dest_zip):
         data = response.json()
         commits = {}
         for option in data.get("output", {}).get("transitTimeDetails", []):
-            service = option.get("serviceType")
+            service = option.get("serviceType", "").upper()
             delivery = option.get("commitDate")
             if service and delivery:
                 commits[service] = delivery
+        st.write("📦 Full Transit Times API Response:", data)
         return commits
     except requests.exceptions.RequestException as e:
         return {}
@@ -144,7 +146,7 @@ def extract_selected_rates(response, transit_estimates):
 
             if amount and currency:
                 estimated = item.get("commit", {}).get("dateDetail", {}).get("estimatedDeliveryDateTime") or item.get("operationalDetail", {}).get("deliveryDate") or "N/A"
-                delivery = transit_estimates.get(item.get("serviceType"), "Estimate unavailable")
+                delivery = transit_estimates.get(item.get("serviceType", "").upper(), "Estimate unavailable")
                 results.append({"Service": service_name, "Price": f"{amount} {currency}", "Estimated Delivery": transit_estimates.get(item.get("serviceType"), "Estimate unavailable")})
     return results
 
