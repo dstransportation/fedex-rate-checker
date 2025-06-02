@@ -38,6 +38,7 @@ def get_transit_times(origin_zip, dest_zip, origin_state, dest_state):
         response = requests.post("https://apis.fedex.com/transit/v1/transittimes", headers=headers, json=body)
         response.raise_for_status()
         data = response.json()
+        st.write("📄 Full Transit Times Raw JSON:", data)
         commits = {}
         for option in data.get("output", {}).get("transitTimeDetails", []):
             service = option.get("serviceType", "").upper()
