@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 import os
 import pandas as pd
+from datetime import date
 
 st.set_page_config(page_title="FedEx Rate Checker", layout="centered")
 
@@ -11,6 +12,41 @@ CLIENT_SECRET = os.getenv("FEDEX_CLIENT_SECRET", "YOUR_FEDEX_CLIENT_SECRET")
 ACCOUNT_NUMBER = os.getenv("FEDEX_ACCOUNT_NUMBER", "YOUR_FEDEX_ACCOUNT_NUMBER")
 
 # --- Helper Functions ---
+
+def get_transit_times(origin_zip, dest_zip):
+    token = get_access_token()
+    if not token:
+        return {}
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+
+    body = {
+        "accountNumber": {"value": ACCOUNT_NUMBER},
+        "requestedShipment": {
+            "shipper": {"address": {"postalCode": origin_zip, "countryCode": "US"}},
+            "recipient": {"address": {"postalCode": dest_zip, "countryCode": "US"}},
+            "pickupType": "DROPOFF_AT_FEDEX_LOCATION",
+            "shipDate": date.today().isoformat()
+        }
+    }
+
+    try:
+        response = requests.post("https://apis.fedex.com/transit/v1/transittimes", headers=headers, json=body)
+        response.raise_for_status()
+        data = response.json()
+        commits = {}
+        for option in data.get("output", {}).get("transitTimeDetails", []):
+            service = option.get("serviceType")
+            delivery = option.get("commitDate")
+            if service and delivery:
+                commits[service] = delivery
+        return commits
+    except requests.exceptions.RequestException as e:
+        return {}
+
 def get_access_token():
     url = "https://apis.fedex.com/oauth/token"
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
@@ -83,7 +119,7 @@ def get_list_rates(origin_zip, dest_zip, weight_lb, length, width, height):
     except requests.exceptions.RequestException as e:
         return {"error": f"API request failed: {e}"}
 
-def extract_selected_rates(response):
+def extract_selected_rates(response, transit_estimates):
     results = []
     rate_details = response.get("output", {}).get("rateReplyDetails", [])
     for item in rate_details:
@@ -106,7 +142,8 @@ def extract_selected_rates(response):
 
             if amount and currency:
                 estimated = item.get("commit", {}).get("dateDetail", {}).get("estimatedDeliveryDateTime") or item.get("operationalDetail", {}).get("deliveryDate") or "N/A"
-                results.append({"Service": service_name, "Price": f"{amount} {currency}", "Estimated Delivery": item.get("operationalDetail", {}).get("deliveryDate", "Estimate unavailable")})
+                delivery = transit_estimates.get(item.get("serviceType"), "Estimate unavailable")
+                results.append({"Service": service_name, "Price": f"{amount} {currency}", "Estimated Delivery": delivery}).get("deliveryDate", "Estimate unavailable")})
     return results
 
 # --- Streamlit UI ---
@@ -127,7 +164,8 @@ if submitted:
     if "error" in response:
         st.error(response["error"])
     else:
-        rates = extract_selected_rates(response)
+        transit_estimates = get_transit_times(origin, destination)
+        rates = extract_selected_rates(response, transit_estimates)
         if rates:
             st.success("Here are the available list rates:")
             df = pd.DataFrame(rates)
