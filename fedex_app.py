@@ -85,6 +85,7 @@ def get_list_rates(origin_zip, dest_zip, weight_lb, length, width, height):
             "address": {
                 "postalCode": origin_zip,
                 "stateOrProvinceCode": origin_state,
+                "countryCode": "US",
                     "countryCode": "US"
                 }
             },
@@ -92,6 +93,7 @@ def get_list_rates(origin_zip, dest_zip, weight_lb, length, width, height):
             "address": {
                 "postalCode": dest_zip,
                 "stateOrProvinceCode": dest_state,
+                "countryCode": "US",
                     "countryCode": "US",
                     "residential": False
                 }
