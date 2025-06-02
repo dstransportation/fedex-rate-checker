@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
 import os
+import pandas as pd
 
 st.set_page_config(page_title="FedEx Rate Checker", layout="centered")
 
@@ -26,7 +27,7 @@ def get_access_token():
         st.error(f"OAuth error: {e}")
         return None
 
-def get_list_rates(origin_zip, dest_zip, weight_lb):
+def get_list_rates(origin_zip, dest_zip, weight_lb, length, width, height):
     token = get_access_token()
     if not token:
         return {"error": "Unable to get access token."}
@@ -60,6 +61,12 @@ def get_list_rates(origin_zip, dest_zip, weight_lb):
                     "weight": {
                         "units": "LB",
                         "value": weight_lb
+                    },
+                    "dimensions": {
+                        "length": int(length),
+                        "width": int(width),
+                        "height": int(height),
+                        "units": "IN"
                     }
                 }
             ]
@@ -74,12 +81,10 @@ def get_list_rates(origin_zip, dest_zip, weight_lb):
         return {"error": f"API request failed: {e}"}
 
 def extract_selected_rates(response):
-    results = {}
+    rows = []
     rate_details = response.get("output", {}).get("rateReplyDetails", [])
     for item in rate_details:
         service_name = item.get("serviceName") or item.get("serviceType") or "Unknown Service"
-        st.write(f"🧪 Checking: {service_name}")
-
         for detail in item.get("ratedShipmentDetails", []):
             charge = detail.get("totalNetFedExCharge")
             if not charge:
@@ -97,12 +102,8 @@ def extract_selected_rates(response):
                 currency = None
 
             if amount and currency:
-                rate_display = f"{amount} {currency}"
-                st.write(f"✅ Rate found for {service_name}: {rate_display}")
-                results[service_name] = rate_display
-            else:
-                st.write(f"❌ Missing amount/currency for {service_name}")
-    return results
+                rows.append({"Service": service_name, "Price": f"{amount} {currency}"})
+    return rows
 
 # --- Streamlit UI ---
 st.title("📦 FedEx Rate Checker")
@@ -112,22 +113,24 @@ with st.form("rate_form"):
     origin = st.text_input("From ZIP Code", value="53202")
     destination = st.text_input("To ZIP Code", value="90210")
     weight = st.number_input("Package Weight (lb)", min_value=0.1, value=10.0)
+    length = st.number_input("Length (in)", min_value=1.0, value=10.0)
+    width = st.number_input("Width (in)", min_value=1.0, value=10.0)
+    height = st.number_input("Height (in)", min_value=1.0, value=10.0)
     submitted = st.form_submit_button("Get Rates")
 
 if submitted:
-    response = get_list_rates(origin, destination, weight)
+    response = get_list_rates(origin, destination, weight, length, width, height)
     if "error" in response:
         st.error(response["error"])
     else:
         rates = extract_selected_rates(response)
         if rates:
             st.success("Here are the available list rates:")
-            for service, price in rates.items():
-                st.write(f"**{service}**: {price}")
+            df = pd.DataFrame(rates)
+            st.table(df)
         else:
             st.warning("No matching list rates returned for the specified inputs.")
 
-        # Show FedEx alerts if available
         alerts = response.get("output", {}).get("alerts", [])
         if alerts:
             st.info("FedEx API Alerts:")
@@ -136,7 +139,6 @@ if submitted:
                 message = alert.get("message")
                 st.write(f"- ({code}) {message}")
 
-        # Always show the raw FedEx response for debugging
         with st.expander("See full FedEx API response"):
             try:
                 st.json(response)
