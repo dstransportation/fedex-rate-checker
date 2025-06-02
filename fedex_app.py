@@ -13,7 +13,7 @@ ACCOUNT_NUMBER = os.getenv("FEDEX_ACCOUNT_NUMBER", "YOUR_FEDEX_ACCOUNT_NUMBER")
 
 # --- Helper Functions ---
 
-def get_transit_times(origin_zip, dest_zip):
+def get_transit_times(origin_zip, dest_zip, origin_state, dest_state):
     st.write("📡 Calling FedEx Transit Times API")
     token = get_access_token()
     if not token:
@@ -82,14 +82,16 @@ def get_list_rates(origin_zip, dest_zip, weight_lb, length, width, height):
         "shipDate": date.today().isoformat(),
         "requestedShipment": {
             "shipper": {
-                "address": {
-                    "postalCode": origin_zip,
+            "address": {
+                "postalCode": origin_zip,
+                "stateOrProvinceCode": origin_state,
                     "countryCode": "US"
                 }
             },
             "recipient": {
-                "address": {
-                    "postalCode": dest_zip,
+            "address": {
+                "postalCode": dest_zip,
+                "stateOrProvinceCode": dest_state,
                     "countryCode": "US",
                     "residential": False
                 }
@@ -155,12 +157,24 @@ st.title("📦 FedEx Rate Checker")
 st.markdown("Check retail (list) rates for FedEx Ground, 2Day, and Overnight services.")
 
 with st.form("rate_form"):
-    origin = st.text_input("From ZIP Code", value="53202")
-    destination = st.text_input("To ZIP Code", value="90210")
-    weight = st.number_input("Package Weight (lb)", min_value=0.1, value=10.0)
-    length = st.number_input("Length (in)", min_value=1.0, value=10.0)
-    width = st.number_input("Width (in)", min_value=1.0, value=10.0)
-    height = st.number_input("Height (in)", min_value=1.0, value=10.0)
+    col1, col2 = st.columns(2)
+    with col1:
+        destination = st.text_input("To ZIP Code", value="90210")
+        dest_state = st.text_input("To State Code", value="CA")
+    with col2:
+        origin = st.text_input("From ZIP Code", value="53202")
+        origin_state = st.text_input("From State Code", value="WI")
+
+    col3, col4, col5, col6 = st.columns(4)
+    with col3:
+        weight = st.number_input("Weight (lb)", min_value=0.1, value=10.0)
+    with col4:
+        length = st.number_input("Length (in)", min_value=1.0, value=10.0)
+    with col5:
+        width = st.number_input("Width (in)", min_value=1.0, value=10.0)
+    with col6:
+        height = st.number_input("Height (in)", min_value=1.0, value=10.0)
+
     submitted = st.form_submit_button("Get Rates")
 
 if submitted:
@@ -168,7 +182,7 @@ if submitted:
     if "error" in response:
         st.error(response["error"])
     else:
-        transit_estimates = get_transit_times(origin, destination)
+        transit_estimates = get_transit_times(origin, destination, origin_state, dest_state)
         rates = extract_selected_rates(response, transit_estimates)
         if rates:
             st.success("Here are the available list rates:")
