@@ -127,6 +127,8 @@ if submitted:
         if rates:
             st.success("Here are the available list rates:")
             df = pd.DataFrame(rates)
+df["Numeric"] = df["Price"].str.extract(r'(\d+\.\d+)').astype(float)
+df = df.sort_values(by="Numeric").drop(columns="Numeric")
             st.table(df.set_index("Service"))
         else:
             st.warning("No matching list rates returned for the specified inputs.")
