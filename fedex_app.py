@@ -78,13 +78,20 @@ def extract_selected_rates(response):
     rate_details = response.get("output", {}).get("rateReplyDetails", [])
     for item in rate_details:
         service_name = item.get("serviceName") or item.get("serviceType") or "Unknown Service"
+        st.write(f"🧪 Checking: {service_name}")
+
         for detail in item.get("ratedShipmentDetails", []):
             rate_detail = detail.get("shipmentRateDetail") or {}
             charge = rate_detail.get("totalNetFedExCharge") or {}
             amount = charge.get("amount")
             currency = charge.get("currency")
+
             if amount and currency:
-                results[service_name] = f"{amount} {currency}"
+                rate_display = f"{amount} {currency}"
+                st.write(f"✅ Rate found for {service_name}: {rate_display}")
+                results[service_name] = rate_display
+            else:
+                st.write(f"❌ Missing amount/currency for {service_name}")
     return results
 
 # --- Streamlit UI ---
