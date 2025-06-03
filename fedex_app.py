@@ -4,6 +4,7 @@ import os
 import pandas as pd
 from datetime import date, timedelta
 import numpy as np
+import math
 
 st.set_page_config(page_title="FedEx Rate Checker", layout="centered")
 
@@ -11,6 +12,15 @@ st.set_page_config(page_title="FedEx Rate Checker", layout="centered")
 CLIENT_ID = os.getenv("FEDEX_CLIENT_ID", "YOUR_FEDEX_CLIENT_ID")
 CLIENT_SECRET = os.getenv("FEDEX_CLIENT_SECRET", "YOUR_FEDEX_CLIENT_SECRET")
 ACCOUNT_NUMBER = os.getenv("FEDEX_ACCOUNT_NUMBER", "YOUR_FEDEX_ACCOUNT_NUMBER")
+
+# --- Load ZIP code coordinates ---
+@st.cache_data
+def load_zip_coords():
+    zip_df = pd.read_csv("data/US Zip Codes.csv")
+    zip_df["zip"] = zip_df["zip"].astype(str).str.zfill(5)
+    return zip_df.set_index("zip")
+
+zip_coords = load_zip_coords()
 
 # --- Helper Functions ---
 def get_access_token():
@@ -28,6 +38,33 @@ def get_access_token():
     except requests.exceptions.RequestException as e:
         st.error(f"OAuth error: {e}")
         return None
+
+def haversine(lat1, lon1, lat2, lon2):
+    R = 3958.8  # miles
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+    a = math.sin(dphi / 2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2)**2
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+def estimate_ground_transit_days(origin_zip, dest_zip):
+    try:
+        o = zip_coords.loc[str(origin_zip)]
+        d = zip_coords.loc[str(dest_zip)]
+        dist = haversine(o.lat, o.lng, d.lat, d.lng)
+        if dist <= 150:
+            return 1
+        elif dist <= 450:
+            return 2
+        elif dist <= 1000:
+            return 3
+        elif dist <= 2000:
+            return 4
+        else:
+            return 5
+    except KeyError:
+        return 5  # fallback
 
 def get_list_rates(origin_zip, dest_zip, origin_state, dest_state, weight_lb, length, width, height, token):
     if not token:
@@ -85,27 +122,28 @@ def add_business_days(start_date, business_days):
     date_range = pd.bdate_range(start=start_date, periods=business_days + 1).tolist()
     return date_range[-1].date().isoformat()
 
-def extract_selected_rates(response):
+def extract_selected_rates(response, origin_zip, dest_zip):
     results = []
-    transit_days_by_service = {
+    fixed_days_by_service = {
         "FIRST_OVERNIGHT": 1,
         "PRIORITY_OVERNIGHT": 1,
         "STANDARD_OVERNIGHT": 1,
         "FEDEX_2_DAY_AM": 2,
         "FEDEX_2_DAY": 2,
-        "FEDEX_EXPRESS_SAVER": 3,
-        "FEDEX_GROUND": 5
+        "FEDEX_EXPRESS_SAVER": 3
     }
 
     rate_details = response.get("output", {}).get("rateReplyDetails", [])
     for item in rate_details:
         service_type = item.get("serviceType", "UNKNOWN")
         service_name = item.get("serviceName") or service_type
-        transit_days = transit_days_by_service.get(service_type)
-        if transit_days:
-            delivery_date = add_business_days(date.today(), transit_days)
+
+        if service_type == "FEDEX_GROUND":
+            days = estimate_ground_transit_days(origin_zip, dest_zip)
         else:
-            delivery_date = "Estimate unavailable"
+            days = fixed_days_by_service.get(service_type, None)
+
+        delivery_date = add_business_days(date.today(), days) if days else "Estimate unavailable"
 
         for detail in item.get("ratedShipmentDetails", []):
             charge = detail.get("totalNetFedExCharge")
@@ -163,7 +201,7 @@ if submitted:
         if "error" in response:
             st.error(response["error"])
         else:
-            rates = extract_selected_rates(response)
+            rates = extract_selected_rates(response, origin, destination)
             if rates:
                 st.success("Here are the available list rates:")
                 df = pd.DataFrame(rates)
