@@ -12,41 +12,6 @@ CLIENT_SECRET = os.getenv("FEDEX_CLIENT_SECRET", "YOUR_FEDEX_CLIENT_SECRET")
 ACCOUNT_NUMBER = os.getenv("FEDEX_ACCOUNT_NUMBER", "YOUR_FEDEX_ACCOUNT_NUMBER")
 
 # --- Helper Functions ---
-
-def get_transit_times(origin_zip, dest_zip, origin_state, dest_state):
-    token = get_access_token()
-    if not token:
-        return {}
-
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    }
-
-    body = {
-        "accountNumber": {"value": ACCOUNT_NUMBER},
-        "requestedShipment": {
-            "shipper": {"address": {"postalCode": origin_zip, "stateOrProvinceCode": origin_state, "countryCode": "US"}},
-            "recipient": {"address": {"postalCode": dest_zip, "stateOrProvinceCode": dest_state, "countryCode": "US"}},
-            "pickupType": "DROPOFF_AT_FEDEX_LOCATION",
-            "shipDate": date.today().isoformat()
-        }
-    }
-
-    try:
-        response = requests.post("https://apis.fedex.com/transit/v1/transittimes", headers=headers, json=body)
-        response.raise_for_status()
-        data = response.json()
-        commits = {}
-        for option in data.get("output", {}).get("transitTimeDetails", []):
-            service = option.get("serviceType", "").upper()
-            delivery = option.get("commitDate")
-            if service and delivery:
-                commits[service] = delivery
-        return commits
-    except requests.exceptions.RequestException:
-        return {}
-
 def get_access_token():
     url = "https://apis.fedex.com/oauth/token"
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
@@ -63,8 +28,69 @@ def get_access_token():
         st.error(f"OAuth error: {e}")
         return None
 
-def get_list_rates(origin_zip, dest_zip, weight_lb, length, width, height):
-    token = get_access_token()
+def get_transit_times(origin_zip, dest_zip, origin_state, dest_state, token):
+    if not token:
+        return {}
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+
+    services_to_check = ["FEDEX_GROUND", "FEDEX_2_DAY", "FEDEX_OVERNIGHT"]
+
+    base_body = {
+        "accountNumber": {"value": ACCOUNT_NUMBER},
+        "requestedShipment": {
+            "shipper": {
+                "address": {
+                    "postalCode": origin_zip,
+                    "stateOrProvinceCode": origin_state,
+                    "countryCode": "US"
+                }
+            },
+            "recipient": {
+                "address": {
+                    "postalCode": dest_zip,
+                    "stateOrProvinceCode": dest_state,
+                    "countryCode": "US"
+                }
+            },
+            "pickupType": "USE_SCHEDULED_PICKUP",
+            "shipDate": date.today().isoformat()
+        }
+    }
+
+    commits = {}
+    for service in services_to_check:
+        body = base_body.copy()
+        body["requestedShipment"] = base_body["requestedShipment"].copy()
+        body["requestedShipment"]["serviceType"] = service
+
+        try:
+            response = requests.post(
+                "https://apis.fedex.com/transit/v1/transittimes",
+                headers=headers,
+                json=body
+            )
+            if response.status_code != 200:
+                st.warning(f"Transit time API error for {service}: {response.status_code} - {response.text}")
+                continue
+
+            data = response.json()
+            details = data.get("output", {}).get("transitTimeDetails", [])
+            for option in details:
+                svc = option.get("serviceType", service)
+                delivery = option.get("commitDate") or "Unavailable"
+                commits[svc] = delivery
+
+        except requests.exceptions.RequestException as e:
+            st.warning(f"Error fetching transit time for {service}: {e}")
+            continue
+
+    return commits
+
+def get_list_rates(origin_zip, dest_zip, origin_state, dest_state, weight_lb, length, width, height, token):
     if not token:
         return {"error": "Unable to get access token."}
 
@@ -97,10 +123,7 @@ def get_list_rates(origin_zip, dest_zip, weight_lb, length, width, height):
             "rateRequestType": ["LIST"],
             "requestedPackageLineItems": [
                 {
-                    "weight": {
-                        "units": "LB",
-                        "value": weight_lb
-                    },
+                    "weight": {"units": "LB", "value": weight_lb},
                     "dimensions": {
                         "length": int(length),
                         "width": int(width),
@@ -150,7 +173,7 @@ def extract_selected_rates(response, transit_estimates):
     return results
 
 # --- Streamlit UI ---
-st.title("📦 FedEx Rate Checker")
+st.title("\U0001F4E6 FedEx Rate Checker")
 st.markdown("Check retail (list) rates for FedEx Ground, 2Day, and Overnight services.")
 
 with st.form("rate_form"):
@@ -175,32 +198,36 @@ with st.form("rate_form"):
     submitted = st.form_submit_button("Get Rates")
 
 if submitted:
-    response = get_list_rates(origin, destination, weight, length, width, height)
-    if "error" in response:
-        st.error(response["error"])
-    else:
-        transit_estimates = get_transit_times(origin, destination, origin_state, dest_state)
-        rates = extract_selected_rates(response, transit_estimates)
-        if rates:
-            st.success("Here are the available list rates:")
-            df = pd.DataFrame(rates)
-            df["Numeric"] = df["Price"].str.extract(r'(\d+\.\d+)').astype(float)
-            df = df.sort_values(by="Numeric").drop(columns="Numeric")
-            st.table(df[["Service", "Price", "Estimated Delivery"]].set_index("Service"))
+    token = get_access_token()
+    if token:
+        response = get_list_rates(origin, destination, origin_state, dest_state, weight, length, width, height, token)
+        if "error" in response:
+            st.error(response["error"])
         else:
-            st.warning("No matching list rates returned for the specified inputs.")
+            transit_estimates = get_transit_times(origin, destination, origin_state, dest_state, token)
+            rates = extract_selected_rates(response, transit_estimates)
+            if rates:
+                st.success("Here are the available list rates:")
+                df = pd.DataFrame(rates)
+                df["Numeric"] = df["Price"].str.extract(r'(\d+\.\d+)').astype(float)
+                df = df.sort_values(by="Numeric").drop(columns="Numeric")
+                st.table(df[["Service", "Price", "Estimated Delivery"]].set_index("Service"))
+            else:
+                st.warning("No matching list rates returned for the specified inputs.")
 
-        alerts = response.get("output", {}).get("alerts", [])
-        if alerts:
-            st.info("FedEx API Alerts:")
-            for alert in alerts:
-                code = alert.get("code")
-                message = alert.get("message")
-                st.write(f"- ({code}) {message}")
+            alerts = response.get("output", {}).get("alerts", [])
+            if alerts:
+                st.info("FedEx API Alerts:")
+                for alert in alerts:
+                    code = alert.get("code")
+                    message = alert.get("message")
+                    st.write(f"- ({code}) {message}")
 
-        with st.expander("See full FedEx API response"):
-            try:
-                st.json(response)
-            except Exception:
-                st.write("Raw response:")
-                st.write(response)
+            with st.expander("See full FedEx API response"):
+                try:
+                    st.json(response)
+                except Exception:
+                    st.write("Raw response:")
+                    st.write(response)
+    else:
+        st.error("Failed to get FedEx access token.")
