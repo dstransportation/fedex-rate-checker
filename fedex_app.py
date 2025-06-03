@@ -14,7 +14,6 @@ ACCOUNT_NUMBER = os.getenv("FEDEX_ACCOUNT_NUMBER", "YOUR_FEDEX_ACCOUNT_NUMBER")
 # --- Helper Functions ---
 
 def get_transit_times(origin_zip, dest_zip, origin_state, dest_state):
-    
     token = get_access_token()
     if not token:
         return {}
@@ -38,16 +37,14 @@ def get_transit_times(origin_zip, dest_zip, origin_state, dest_state):
         response = requests.post("https://apis.fedex.com/transit/v1/transittimes", headers=headers, json=body)
         response.raise_for_status()
         data = response.json()
-        
         commits = {}
         for option in data.get("output", {}).get("transitTimeDetails", []):
             service = option.get("serviceType", "").upper()
             delivery = option.get("commitDate")
             if service and delivery:
                 commits[service] = delivery
-        
         return commits
-    except requests.exceptions.RequestException as e:
+    except requests.exceptions.RequestException:
         return {}
 
 def get_access_token():
@@ -66,8 +63,6 @@ def get_access_token():
         st.error(f"OAuth error: {e}")
         return None
 
-from datetime import date
-
 def get_list_rates(origin_zip, dest_zip, weight_lb, length, width, height):
     token = get_access_token()
     if not token:
@@ -83,18 +78,16 @@ def get_list_rates(origin_zip, dest_zip, weight_lb, length, width, height):
         "shipDate": date.today().isoformat(),
         "requestedShipment": {
             "shipper": {
-            "address": {
-                "postalCode": origin_zip,
-                "stateOrProvinceCode": origin_state,
-                "countryCode": "US",
+                "address": {
+                    "postalCode": origin_zip,
+                    "stateOrProvinceCode": origin_state,
                     "countryCode": "US"
                 }
             },
             "recipient": {
-            "address": {
-                "postalCode": dest_zip,
-                "stateOrProvinceCode": dest_state,
-                "countryCode": "US",
+                "address": {
+                    "postalCode": dest_zip,
+                    "stateOrProvinceCode": dest_state,
                     "countryCode": "US",
                     "residential": False
                 }
@@ -127,11 +120,9 @@ def get_list_rates(origin_zip, dest_zip, weight_lb, length, width, height):
         return {"error": f"API request failed: {e}"}
 
 def extract_selected_rates(response, transit_estimates):
-    
     results = []
     rate_details = response.get("output", {}).get("rateReplyDetails", [])
     for item in rate_details:
-        
         service_name = item.get("serviceName") or item.get("serviceType") or "Unknown Service"
         for detail in item.get("ratedShipmentDetails", []):
             charge = detail.get("totalNetFedExCharge")
@@ -150,9 +141,12 @@ def extract_selected_rates(response, transit_estimates):
                 currency = None
 
             if amount and currency:
-                estimated = item.get("commit", {}).get("dateDetail", {}).get("estimatedDeliveryDateTime") or item.get("operationalDetail", {}).get("deliveryDate") or "N/A"
-                delivery = transit_estimates.get(item.get("serviceType", "").upper(), "Estimate unavailable")
-                results.append({"Service": service_name, "Price": f"{amount} {currency}", "Estimated Delivery": transit_estimates.get(item.get("serviceType"), "Estimate unavailable")})
+                delivery = transit_estimates.get(item.get("serviceType"), "Estimate unavailable")
+                results.append({
+                    "Service": service_name,
+                    "Price": f"{amount} {currency}",
+                    "Estimated Delivery": delivery
+                })
     return results
 
 # --- Streamlit UI ---
@@ -192,7 +186,7 @@ if submitted:
             df = pd.DataFrame(rates)
             df["Numeric"] = df["Price"].str.extract(r'(\d+\.\d+)').astype(float)
             df = df.sort_values(by="Numeric").drop(columns="Numeric")
-            st.table(df.set_index("Service"))
+            st.table(df[["Service", "Price", "Estimated Delivery"]].set_index("Service"))
         else:
             st.warning("No matching list rates returned for the specified inputs.")
 
