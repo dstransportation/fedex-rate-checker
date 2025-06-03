@@ -16,7 +16,7 @@ ACCOUNT_NUMBER = os.getenv("FEDEX_ACCOUNT_NUMBER", "YOUR_FEDEX_ACCOUNT_NUMBER")
 # --- Load ZIP code coordinates ---
 @st.cache_data
 def load_zip_coords():
-    zip_df = pd.read_csv("data/US Zip Codes.csv")
+    zip_df = pd.read_csv("US Zip Codes.csv")
     zip_df["zip"] = zip_df["zip"].astype(str).str.zfill(5)
     return zip_df.set_index("zip")
 
