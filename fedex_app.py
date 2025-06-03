@@ -16,7 +16,7 @@ ACCOUNT_NUMBER = os.getenv("FEDEX_ACCOUNT_NUMBER", "YOUR_FEDEX_ACCOUNT_NUMBER")
 # --- Load ZIP code coordinates ---
 @st.cache_data
 def load_zip_coords():
-    zip_df = pd.read_csv("US Zip Codes.csv")
+    zip_df = pd.read_csv("data/US Zip Codes.csv")
     zip_df["zip"] = zip_df["zip"].astype(str).str.zfill(5)
     return zip_df.set_index("zip")
 
@@ -174,22 +174,28 @@ st.title("\U0001F4E6 FedEx Rate Checker")
 st.markdown("Check retail (list) rates for FedEx Ground, 2Day, and Overnight services.")
 
 with st.form("rate_form"):
-    col1, col2 = st.columns(2)
+    st.markdown("### Destination")
+    col1, col2 = st.columns([2, 1])
     with col1:
         destination = st.text_input("To ZIP Code", value="90210")
-        dest_state = st.text_input("To State Code", value="CA")
     with col2:
+        dest_state = st.text_input("To State Code", value="CA")
+
+    st.markdown("### Origin")
+    col3, col4 = st.columns([2, 1])
+    with col3:
         origin = st.text_input("From ZIP Code", value="53202")
+    with col4:
         origin_state = st.text_input("From State Code", value="WI")
 
-    col3, col4, col5, col6 = st.columns(4)
-    with col3:
-        weight = st.number_input("Weight (lb)", min_value=0.1, value=10.0)
-    with col4:
-        length = st.number_input("Length (in)", min_value=1.0, value=10.0)
+    col5, col6, col7, col8 = st.columns(4)
     with col5:
-        width = st.number_input("Width (in)", min_value=1.0, value=10.0)
+        weight = st.number_input("Weight (lb)", min_value=0.1, value=10.0)
     with col6:
+        length = st.number_input("Length (in)", min_value=1.0, value=10.0)
+    with col7:
+        width = st.number_input("Width (in)", min_value=1.0, value=10.0)
+    with col8:
         height = st.number_input("Height (in)", min_value=1.0, value=10.0)
 
     submitted = st.form_submit_button("Get Rates")
