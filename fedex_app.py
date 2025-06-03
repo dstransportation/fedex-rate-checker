@@ -188,6 +188,7 @@ with st.form("rate_form"):
     with col4:
         origin_state = st.text_input("From State Code", value="WI")
 
+    st.markdown("### Weight and Dimensions")
     col5, col6, col7, col8 = st.columns(4)
     with col5:
         weight = st.number_input("Weight (lb)", min_value=0.1, value=10.0)
