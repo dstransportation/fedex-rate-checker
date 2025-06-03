@@ -37,9 +37,7 @@ def get_transit_times(origin_zip, dest_zip, origin_state, dest_state, token):
         "Content-Type": "application/json"
     }
 
-    services_to_check = ["FEDEX_GROUND", "FEDEX_2_DAY", "FEDEX_OVERNIGHT"]
-
-    base_body = {
+    body = {
         "accountNumber": {"value": ACCOUNT_NUMBER},
         "requestedShipment": {
             "shipper": {
@@ -61,34 +59,24 @@ def get_transit_times(origin_zip, dest_zip, origin_state, dest_state, token):
         }
     }
 
-    commits = {}
-    for service in services_to_check:
-        body = base_body.copy()
-        body["requestedShipment"] = base_body["requestedShipment"].copy()
-        body["requestedShipment"]["serviceType"] = service
-
-        try:
-            response = requests.post(
-                "https://apis.fedex.com/transit/v1/transittimes",
-                headers=headers,
-                json=body
-            )
-            if response.status_code != 200:
-                st.warning(f"Transit time API error for {service}: {response.status_code} - {response.text}")
-                continue
-
-            data = response.json()
-            details = data.get("output", {}).get("transitTimeDetails", [])
-            for option in details:
-                svc = option.get("serviceType", service)
-                delivery = option.get("commitDate") or "Unavailable"
-                commits[svc] = delivery
-
-        except requests.exceptions.RequestException as e:
-            st.warning(f"Error fetching transit time for {service}: {e}")
-            continue
-
-    return commits
+    try:
+        response = requests.post(
+            "https://apis.fedex.com/transit/v1/transittimes",
+            headers=headers,
+            json=body
+        )
+        response.raise_for_status()
+        data = response.json()
+        commits = {}
+        for option in data.get("output", {}).get("transitTimeDetails", []):
+            service = option.get("serviceType", "UNKNOWN")
+            delivery = option.get("commitDate", "Unavailable")
+            if service:
+                commits[service] = delivery
+        return commits
+    except requests.exceptions.RequestException as e:
+        st.warning(f"Transit time API error: {e}")
+        return {}
 
 def get_list_rates(origin_zip, dest_zip, origin_state, dest_state, weight_lb, length, width, height, token):
     if not token:
