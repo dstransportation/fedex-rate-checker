@@ -28,6 +28,56 @@ def get_access_token():
         st.error(f"OAuth error: {e}")
         return None
 
+def get_transit_times(origin_zip, dest_zip, origin_state, dest_state, token):
+    if not token:
+        return {}
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+
+    body = {
+        "accountNumber": {"value": ACCOUNT_NUMBER},
+        "requestedShipment": {
+            "shipper": {
+                "address": {
+                    "postalCode": origin_zip,
+                    "stateOrProvinceCode": origin_state,
+                    "countryCode": "US"
+                }
+            },
+            "recipient": {
+                "address": {
+                    "postalCode": dest_zip,
+                    "stateOrProvinceCode": dest_state,
+                    "countryCode": "US"
+                }
+            },
+            "pickupType": "USE_SCHEDULED_PICKUP",
+            "shipDate": date.today().isoformat()
+        }
+    }
+
+    try:
+        response = requests.post(
+            "https://apis.fedex.com/transit/v1/transittimes",
+            headers=headers,
+            json=body
+        )
+        response.raise_for_status()
+        data = response.json()
+        commits = {}
+        for option in data.get("output", {}).get("transitTimeDetails", []):
+            service = option.get("serviceType", "UNKNOWN")
+            delivery = option.get("commitDate", "Unavailable")
+            if service:
+                commits[service] = delivery
+        return commits
+    except requests.exceptions.RequestException as e:
+        st.warning(f"Transit time API error: {e}")
+        return {}
+
 def get_list_rates(origin_zip, dest_zip, origin_state, dest_state, weight_lb, length, width, height, token):
     if not token:
         return {"error": "Unable to get access token."}
@@ -80,18 +130,13 @@ def get_list_rates(origin_zip, dest_zip, origin_state, dest_state, weight_lb, le
     except requests.exceptions.RequestException as e:
         return {"error": f"API request failed: {e}"}
 
-def extract_selected_rates(response):
+def extract_selected_rates(response, transit_estimates):
     results = []
     rate_details = response.get("output", {}).get("rateReplyDetails", [])
     for item in rate_details:
-        service_name = item.get("serviceName") or item.get("serviceType") or "Unknown Service"
-        commit = item.get("commit", {})
-        delivery_date = (
-            commit.get("date") or
-            commit.get("commitDate") or
-            commit.get("deliveryTimestamp") or
-            "Estimate unavailable"
-        )
+        service_type = item.get("serviceType", "UNKNOWN")
+        service_name = item.get("serviceName") or service_type
+        delivery_date = transit_estimates.get(service_type, "Estimate unavailable")
 
         for detail in item.get("ratedShipmentDetails", []):
             charge = detail.get("totalNetFedExCharge")
@@ -149,7 +194,8 @@ if submitted:
         if "error" in response:
             st.error(response["error"])
         else:
-            rates = extract_selected_rates(response)
+            transit_estimates = get_transit_times(origin, destination, origin_state, dest_state, token)
+            rates = extract_selected_rates(response, transit_estimates)
             if rates:
                 st.success("Here are the available list rates:")
                 df = pd.DataFrame(rates)
