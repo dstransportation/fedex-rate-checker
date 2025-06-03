@@ -85,7 +85,14 @@ def extract_selected_rates(response):
     rate_details = response.get("output", {}).get("rateReplyDetails", [])
     for item in rate_details:
         service_name = item.get("serviceName") or item.get("serviceType") or "Unknown Service"
-        delivery_date = item.get("commit", {}).get("date") or "Estimate unavailable"
+        commit = item.get("commit", {})
+        delivery_date = (
+            commit.get("date") or
+            commit.get("commitDate") or
+            commit.get("deliveryTimestamp") or
+            "Estimate unavailable"
+        )
+
         for detail in item.get("ratedShipmentDetails", []):
             charge = detail.get("totalNetFedExCharge")
             if not charge:
