@@ -2,7 +2,8 @@ import streamlit as st
 import requests
 import os
 import pandas as pd
-from datetime import date
+from datetime import date, timedelta
+import numpy as np
 
 st.set_page_config(page_title="FedEx Rate Checker", layout="centered")
 
@@ -27,56 +28,6 @@ def get_access_token():
     except requests.exceptions.RequestException as e:
         st.error(f"OAuth error: {e}")
         return None
-
-def get_transit_times(origin_zip, dest_zip, origin_state, dest_state, token):
-    if not token:
-        return {}
-
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    }
-
-    body = {
-        "accountNumber": {"value": ACCOUNT_NUMBER},
-        "requestedShipment": {
-            "shipper": {
-                "address": {
-                    "postalCode": origin_zip,
-                    "stateOrProvinceCode": origin_state,
-                    "countryCode": "US"
-                }
-            },
-            "recipient": {
-                "address": {
-                    "postalCode": dest_zip,
-                    "stateOrProvinceCode": dest_state,
-                    "countryCode": "US"
-                }
-            },
-            "pickupType": "USE_SCHEDULED_PICKUP",
-            "shipDate": date.today().isoformat()
-        }
-    }
-
-    try:
-        response = requests.post(
-            "https://apis.fedex.com/transit/v1/transittimes",
-            headers=headers,
-            json=body
-        )
-        response.raise_for_status()
-        data = response.json()
-        commits = {}
-        for option in data.get("output", {}).get("transitTimeDetails", []):
-            service = option.get("serviceType", "UNKNOWN")
-            delivery = option.get("commitDate", "Unavailable")
-            if service:
-                commits[service] = delivery
-        return commits
-    except requests.exceptions.RequestException as e:
-        st.warning(f"Transit time API error: {e}")
-        return {}
 
 def get_list_rates(origin_zip, dest_zip, origin_state, dest_state, weight_lb, length, width, height, token):
     if not token:
@@ -130,13 +81,31 @@ def get_list_rates(origin_zip, dest_zip, origin_state, dest_state, weight_lb, le
     except requests.exceptions.RequestException as e:
         return {"error": f"API request failed: {e}"}
 
-def extract_selected_rates(response, transit_estimates):
+def add_business_days(start_date, business_days):
+    date_range = pd.bdate_range(start=start_date, periods=business_days + 1).tolist()
+    return date_range[-1].date().isoformat()
+
+def extract_selected_rates(response):
     results = []
+    transit_days_by_service = {
+        "FIRST_OVERNIGHT": 1,
+        "PRIORITY_OVERNIGHT": 1,
+        "STANDARD_OVERNIGHT": 1,
+        "FEDEX_2_DAY_AM": 2,
+        "FEDEX_2_DAY": 2,
+        "FEDEX_EXPRESS_SAVER": 3,
+        "FEDEX_GROUND": 5
+    }
+
     rate_details = response.get("output", {}).get("rateReplyDetails", [])
     for item in rate_details:
         service_type = item.get("serviceType", "UNKNOWN")
         service_name = item.get("serviceName") or service_type
-        delivery_date = transit_estimates.get(service_type, "Estimate unavailable")
+        transit_days = transit_days_by_service.get(service_type)
+        if transit_days:
+            delivery_date = add_business_days(date.today(), transit_days)
+        else:
+            delivery_date = "Estimate unavailable"
 
         for detail in item.get("ratedShipmentDetails", []):
             charge = detail.get("totalNetFedExCharge")
@@ -194,8 +163,7 @@ if submitted:
         if "error" in response:
             st.error(response["error"])
         else:
-            transit_estimates = get_transit_times(origin, destination, origin_state, dest_state, token)
-            rates = extract_selected_rates(response, transit_estimates)
+            rates = extract_selected_rates(response)
             if rates:
                 st.success("Here are the available list rates:")
                 df = pd.DataFrame(rates)
