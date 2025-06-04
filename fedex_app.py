@@ -13,14 +13,22 @@ CLIENT_ID = os.getenv("FEDEX_CLIENT_ID", "YOUR_FEDEX_CLIENT_ID")
 CLIENT_SECRET = os.getenv("FEDEX_CLIENT_SECRET", "YOUR_FEDEX_CLIENT_SECRET")
 ACCOUNT_NUMBER = os.getenv("FEDEX_ACCOUNT_NUMBER", "YOUR_FEDEX_ACCOUNT_NUMBER")
 
-# --- Load ZIP code coordinates ---
+# --- Load ZIP code coordinates and supplier ZIPs ---
 @st.cache_data
 def load_zip_coords():
     zip_df = pd.read_csv("US Zip Codes.csv")
     zip_df["zip"] = zip_df["zip"].astype(str).str.zfill(5)
     return zip_df.set_index("zip")
 
+def load_supplier_zips():
+    df = pd.read_csv("TEST Supplier Code and Origin Zip.csv")
+    df["supplier_code"] = df["supplier_code"].astype(str)
+    df["zip"] = df["zip"].astype(str).str.zfill(5)
+    return df.set_index("supplier_code")
+
 zip_coords = load_zip_coords()
+supplier_zips = load_supplier_zips()
+MARKUP_PERCENT = 0.10
 
 # --- Helper Functions ---
 def get_access_token():
@@ -40,7 +48,7 @@ def get_access_token():
         return None
 
 def haversine(lat1, lon1, lat2, lon2):
-    R = 3958.8  # miles
+    R = 3958.8
     phi1 = math.radians(lat1)
     phi2 = math.radians(lat2)
     dphi = math.radians(lat2 - lat1)
@@ -64,7 +72,7 @@ def estimate_ground_transit_days(origin_zip, dest_zip):
         else:
             return 5
     except KeyError:
-        return 5  # fallback
+        return 5
 
 def get_list_rates(origin_zip, dest_zip, origin_state, dest_state, weight_lb, length, width, height, token):
     if not token:
@@ -162,9 +170,11 @@ def extract_selected_rates(response, origin_zip, dest_zip):
                 currency = None
 
             if amount and currency:
+                marked_up = round(amount * (1 + MARKUP_PERCENT), 2)
                 results.append({
                     "Service": service_name,
-                    "Price": f"{amount} {currency}",
+                    "FedEx Rate": f"{amount} {currency}",
+                    "Marked Up Rate": f"{marked_up} {currency}",
                     "Estimated Delivery": delivery_date
                 })
     return results
@@ -174,19 +184,15 @@ st.title("\U0001F4E6 FedEx Rate Checker")
 st.markdown("Check retail (list) rates for FedEx Ground, 2Day, and Overnight services.")
 
 with st.form("rate_form"):
+    st.markdown("### Supplier")
+    supplier_code = st.text_input("Supplier Code (origin)", value="SUP100")
+
     st.markdown("### Destination")
     col1, col2 = st.columns([2, 1])
     with col1:
         destination = st.text_input("To ZIP Code", value="90210")
     with col2:
         dest_state = st.text_input("To State Code", value="CA")
-
-    st.markdown("### Origin")
-    col3, col4 = st.columns([2, 1])
-    with col3:
-        origin = st.text_input("From ZIP Code", value="53202")
-    with col4:
-        origin_state = st.text_input("From State Code", value="WI")
 
     st.markdown("### Weight and Dimensions")
     col5, col6, col7, col8 = st.columns(4)
@@ -202,35 +208,40 @@ with st.form("rate_form"):
     submitted = st.form_submit_button("Get Rates")
 
 if submitted:
-    token = get_access_token()
-    if token:
-        response = get_list_rates(origin, destination, origin_state, dest_state, weight, length, width, height, token)
-        if "error" in response:
-            st.error(response["error"])
-        else:
-            rates = extract_selected_rates(response, origin, destination)
-            if rates:
-                st.success("Here are the available list rates:")
-                df = pd.DataFrame(rates)
-                df["Numeric"] = df["Price"].str.extract(r'(\d+\.\d+)').astype(float)
-                df = df.sort_values(by="Numeric").drop(columns="Numeric")
-                st.table(df[["Service", "Price", "Estimated Delivery"]].set_index("Service"))
-            else:
-                st.warning("No matching list rates returned for the specified inputs.")
-
-            alerts = response.get("output", {}).get("alerts", [])
-            if alerts:
-                st.info("FedEx API Alerts:")
-                for alert in alerts:
-                    code = alert.get("code")
-                    message = alert.get("message")
-                    st.write(f"- ({code}) {message}")
-
-            with st.expander("See full FedEx API response"):
-                try:
-                    st.json(response)
-                except Exception:
-                    st.write("Raw response:")
-                    st.write(response)
+    origin = supplier_zips.get("zip").get(supplier_code.upper())
+    if not origin:
+        st.error(f"Supplier code '{supplier_code}' not found.")
     else:
-        st.error("Failed to get FedEx access token.")
+        origin_state = "WI"  # Optional: can enhance to match real state
+        token = get_access_token()
+        if token:
+            response = get_list_rates(origin, destination, origin_state, dest_state, weight, length, width, height, token)
+            if "error" in response:
+                st.error(response["error"])
+            else:
+                rates = extract_selected_rates(response, origin, destination)
+                if rates:
+                    st.success("Here are the available list rates:")
+                    df = pd.DataFrame(rates)
+                    df["Numeric"] = df["Marked Up Rate"].str.extract(r'(\d+\.\d+)').astype(float)
+                    df = df.sort_values(by="Numeric").drop(columns="Numeric")
+                    st.table(df[["Service", "FedEx Rate", "Marked Up Rate", "Estimated Delivery"]].set_index("Service"))
+                else:
+                    st.warning("No matching list rates returned for the specified inputs.")
+
+                alerts = response.get("output", {}).get("alerts", [])
+                if alerts:
+                    st.info("FedEx API Alerts:")
+                    for alert in alerts:
+                        code = alert.get("code")
+                        message = alert.get("message")
+                        st.write(f"- ({code}) {message}")
+
+                with st.expander("See full FedEx API response"):
+                    try:
+                        st.json(response)
+                    except Exception:
+                        st.write("Raw response:")
+                        st.write(response)
+        else:
+            st.error("Failed to get FedEx access token.")
