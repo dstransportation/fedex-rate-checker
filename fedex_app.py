@@ -212,7 +212,11 @@ if submitted:
     if not origin:
         st.error(f"Supplier code '{supplier_code}' not found.")
     else:
-        origin_state = "WI"  # Optional: can enhance to match real state
+        try:
+            origin_state = zip_coords.loc[origin, "state_id"]
+        except KeyError:
+            st.error(f"Could not find state for ZIP code {origin}.")
+            origin_state = ""
         token = get_access_token()
         if token:
             response = get_list_rates(origin, destination, origin_state, dest_state, weight, length, width, height, token)
