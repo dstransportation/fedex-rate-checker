@@ -36,7 +36,7 @@ def load_product_data():
 zip_coords = load_zip_coords()
 supplier_zips = load_supplier_zips()
 product_data = load_product_data()
-MARKUP_PERCENT = 0.10
+MARKUP_PERCENT = 0.33
 
 # --- Helper Functions ---
 def get_access_token():
@@ -178,7 +178,7 @@ def extract_selected_rates(response, origin_zip, dest_zip):
                 currency = None
 
             if amount and currency:
-                marked_up = round(amount * (1 + MARKUP_PERCENT), 2)
+                marked_up = round(amount * (MARKUP_PERCENT), 2)
                 results.append({
                     "Service": service_name,
                     "FedEx Rate": f"{amount} {currency}",
