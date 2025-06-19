@@ -30,6 +30,7 @@ def load_supplier_zips():
 def load_product_data():
     df = pd.read_csv("TEST SAMPLE All Products Shipping Info.csv")
     df["Product Number"] = df["Product Number"].astype(str)
+    df["Product Number"] = df["Product Number"].str.strip()
     df["zip"] = df["zip"].astype(str).str.zfill(5)
     return df.set_index("Product Number")
 
