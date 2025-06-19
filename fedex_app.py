@@ -28,9 +28,9 @@ def load_supplier_zips():
 
 @st.cache_data
 def load_product_data():
-    df = pd.read_csv("TEST SAMPLE All Products Shipping Info.csv")
+    df = pd.read_csv("TEST SAMPLE All Products Shipping Info.csv", encoding="utf-8-sig")
+    df.columns = df.columns.str.strip()
     df["Product Number"] = df["Product Number"].astype(str)
-    df["Product Number"] = df["Product Number"].str.strip()
     df["zip"] = df["zip"].astype(str).str.zfill(5)
     return df.set_index("Product Number")
 
