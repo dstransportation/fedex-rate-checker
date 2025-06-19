@@ -209,10 +209,10 @@ if submitted:
         product = product_data.loc[product_number.strip()]
         supplier_code = product["SupplierCode"]
         origin = product["zip"]
-        weight = product["Weight"]
-        length = product["Length"]
-        width = product["Width"]
-        height = product["Height"]
+        weight = float(product["Weight"])
+        length = int(product["Length"])
+        width = int(product["Width"])
+        height = int(product["Height"])
         origin_state = zip_coords.loc[origin, "state_id"]
 
         token = get_access_token()
