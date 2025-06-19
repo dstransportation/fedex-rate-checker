@@ -13,7 +13,7 @@ CLIENT_ID = os.getenv("FEDEX_CLIENT_ID", "YOUR_FEDEX_CLIENT_ID")
 CLIENT_SECRET = os.getenv("FEDEX_CLIENT_SECRET", "YOUR_FEDEX_CLIENT_SECRET")
 ACCOUNT_NUMBER = os.getenv("FEDEX_ACCOUNT_NUMBER", "YOUR_FEDEX_ACCOUNT_NUMBER")
 
-# --- Load ZIP code coordinates and supplier ZIPs ---
+# --- Load ZIP code coordinates, supplier ZIPs, and product data ---
 @st.cache_data
 def load_zip_coords():
     zip_df = pd.read_csv("US Zip Codes.csv")
@@ -26,8 +26,16 @@ def load_supplier_zips():
     df["zip"] = df["zip"].astype(str).str.zfill(5)
     return df.set_index("supplier_code")
 
+@st.cache_data
+def load_product_data():
+    df = pd.read_csv("TEST SAMPLE All Products Shipping Info.csv")
+    df["Product Number"] = df["Product Number"].astype(str)
+    df["zip"] = df["zip"].astype(str).str.zfill(5)
+    return df.set_index("Product Number")
+
 zip_coords = load_zip_coords()
 supplier_zips = load_supplier_zips()
+product_data = load_product_data()
 MARKUP_PERCENT = 0.10
 
 # --- Helper Functions ---
@@ -184,8 +192,8 @@ st.title("\U0001F4E6 FedEx Rate Checker")
 st.markdown("Check retail (list) rates for FedEx Ground, 2Day, and Overnight services.")
 
 with st.form("rate_form"):
-    st.markdown("### Supplier")
-    supplier_code = st.text_input("Supplier Code (origin)", value="SUP100")
+    st.markdown("### Product Lookup")
+    product_number = st.text_input("Product Number", value="0-00004")
 
     st.markdown("### Destination")
     col1, col2 = st.columns([2, 1])
@@ -194,29 +202,19 @@ with st.form("rate_form"):
     with col2:
         dest_state = st.text_input("To State Code", value="CA")
 
-    st.markdown("### Weight and Dimensions")
-    col5, col6, col7, col8 = st.columns(4)
-    with col5:
-        weight = st.number_input("Weight (lb)", min_value=0.1, value=10.0)
-    with col6:
-        length = st.number_input("Length (in)", min_value=1.0, value=10.0)
-    with col7:
-        width = st.number_input("Width (in)", min_value=1.0, value=10.0)
-    with col8:
-        height = st.number_input("Height (in)", min_value=1.0, value=10.0)
-
     submitted = st.form_submit_button("Get Rates")
 
 if submitted:
-    origin = supplier_zips.get("zip").get(supplier_code.upper())
-    if not origin:
-        st.error(f"Supplier code '{supplier_code}' not found.")
-    else:
-        try:
-            origin_state = zip_coords.loc[origin, "state_id"]
-        except KeyError:
-            st.error(f"Could not find state for ZIP code {origin}.")
-            origin_state = ""
+    try:
+        product = product_data.loc[product_number.strip()]
+        supplier_code = product["SupplierCode"]
+        origin = product["zip"]
+        weight = product["Weight"]
+        length = product["Length"]
+        width = product["Width"]
+        height = product["Height"]
+        origin_state = zip_coords.loc[origin, "state_id"]
+
         token = get_access_token()
         if token:
             response = get_list_rates(origin, destination, origin_state, dest_state, weight, length, width, height, token)
@@ -249,3 +247,6 @@ if submitted:
                         st.write(response)
         else:
             st.error("Failed to get FedEx access token.")
+
+    except KeyError:
+        st.error(f"Product number '{product_number}' not found in product catalog.")
