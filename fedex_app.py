@@ -36,7 +36,7 @@ def load_product_data():
 zip_coords = load_zip_coords()
 supplier_zips = load_supplier_zips()
 product_data = load_product_data()
-MARKUP_PERCENT = 0.33
+MARKUP_PERCENT = 0.10
 
 # --- Helper Functions ---
 def get_access_token():
@@ -178,11 +178,11 @@ def extract_selected_rates(response, origin_zip, dest_zip):
                 currency = None
 
             if amount and currency:
-                marked_up = round(amount * (MARKUP_PERCENT), 2)
+                marked_up = round(amount * (1 + MARKUP_PERCENT), 2)
                 results.append({
                     "Service": service_name,
-                    "FedEx Rate": f"{amount} {currency}",
-                    "Marked Up Rate": f"{marked_up} {currency}",
+                    "List Rate": f"{amount} {currency}",
+                    "DS Rate": f"{marked_up} {currency}",
                     "Estimated Delivery": delivery_date
                 })
     return results
@@ -227,7 +227,7 @@ if submitted:
                     df = pd.DataFrame(rates)
                     df["Numeric"] = df["Marked Up Rate"].str.extract(r'(\d+\.\d+)').astype(float)
                     df = df.sort_values(by="Numeric").drop(columns="Numeric")
-                    st.table(df[["Service", "FedEx Rate", "Marked Up Rate", "Estimated Delivery"]].set_index("Service"))
+                    st.table(df[["Service", "List Rate", "DS Rate", "Estimated Delivery"]].set_index("Service"))
                 else:
                     st.warning("No matching list rates returned for the specified inputs.")
 
