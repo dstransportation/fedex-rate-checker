@@ -214,10 +214,14 @@ if submitted:
         length = int(product["Length"])
         width = int(product["Width"])
         height = int(product["Height"])
+        try:
         origin_state = zip_coords.loc[origin, "state_id"]
+    except KeyError:
+        st.error(f"Could not determine state for origin ZIP: {origin}")
+        origin_state = None
 
         token = get_access_token()
-        if token:
+        if token and origin_state:
             response = get_list_rates(origin, destination, origin_state, dest_state, weight, length, width, height, token)
             if "error" in response:
                 st.error(response["error"])
