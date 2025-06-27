@@ -216,9 +216,9 @@ if submitted:
         height = int(product["Height"])
         try:
         origin_state = zip_coords.loc[origin, "state_id"]
-    except KeyError:
-        st.error(f"Could not determine state for origin ZIP: {origin}")
-        origin_state = None
+except KeyError:
+    st.error(f"Could not determine state for origin ZIP: {origin}")
+    origin_state = None
 
         token = get_access_token()
         if token and origin_state:
