@@ -179,11 +179,16 @@ def extract_selected_rates(response, origin_zip, dest_zip):
                 currency = None
 
             if amount and currency:
-                marked_up = round(amount * (1 + MARKUP_PERCENT), 2)
+                if service_type == "FEDEX_GROUND" and dest_state not in ["HI", "AK"]:
+                    list_rate = "Free"
+                    ds_rate = "Free"
+                else:
+                    list_rate = f"{amount} {currency}"
+                    ds_rate = f"{round(amount * (1 + MARKUP_PERCENT), 2)} {currency}"
                 results.append({
                     "Service": service_name,
-                    "List Rate": f"{amount} {currency}",
-                    "DS Rate": f"{marked_up} {currency}",
+                    "List Rate": list_rate,
+                    "DS Rate": ds_rate,
                     "Estimated Delivery": delivery_date
                 })
     return results
@@ -232,7 +237,7 @@ if submitted:
                 if rates:
                     st.success("Here are the available list rates:")
                     df = pd.DataFrame(rates)
-                    df["Numeric"] = df["DS Rate"].str.extract(r'(\d+\.\d+)').astype(float)
+                    df["Numeric"] = df["Marked Up Rate"].str.extract(r'(\d+\.\d+)').astype(float)
                     df = df.sort_values(by="Numeric").drop(columns="Numeric")
                     st.table(df[["Service", "List Rate", "DS Rate", "Estimated Delivery"]].set_index("Service"))
                 else:
