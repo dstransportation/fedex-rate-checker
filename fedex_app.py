@@ -227,7 +227,7 @@ if submitted:
             response = get_list_rates(origin, destination, origin_state, dest_state, weight, length, width, height, token)
             if "error" in response:
                 st.error(response["error"])
-            
+            else:
                 rates = extract_selected_rates(response, origin, destination)
                 if rates:
                     st.success("Here are the available list rates:")
