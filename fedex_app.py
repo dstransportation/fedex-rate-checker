@@ -206,8 +206,8 @@ with st.form("rate_form"):
     submitted = st.form_submit_button("Get Rates")
 
 if submitted:
-    product = product_data.loc.get(product_number.strip())
-    if product is None:
+    product = product_data.loc[product_data.index.str.strip() == product_number.strip()].squeeze()
+    if product is None or product.empty:
         st.error(f"Product number '{product_number}' not found in product catalog.")
     else:
         supplier_code = product["SupplierCode"]
@@ -257,3 +257,4 @@ if submitted:
 
     if product is None:
         st.error(f"Product number '{product_number}' not found in product catalog.")
+    
