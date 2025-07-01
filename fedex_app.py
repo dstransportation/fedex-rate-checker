@@ -206,8 +206,10 @@ with st.form("rate_form"):
     submitted = st.form_submit_button("Get Rates")
 
 if submitted:
-    try:
-        product = product_data.loc.get(product_number.strip())
+    product = product_data.loc.get(product_number.strip())
+    if product is None:
+        st.error(f"Product number '{product_number}' not found in product catalog.")
+    else:
         supplier_code = product["SupplierCode"]
         origin = product["zip"]
         weight = float(product["Weight"])
@@ -225,7 +227,7 @@ if submitted:
             response = get_list_rates(origin, destination, origin_state, dest_state, weight, length, width, height, token)
             if "error" in response:
                 st.error(response["error"])
-            else:
+            
                 rates = extract_selected_rates(response, origin, destination)
                 if rates:
                     st.success("Here are the available list rates:")
