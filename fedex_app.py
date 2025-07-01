@@ -207,7 +207,7 @@ with st.form("rate_form"):
 
 if submitted:
     try:
-        product = product_data.loc[product_number.strip()]
+        product = product_data.loc.get(product_number.strip())
         supplier_code = product["SupplierCode"]
         origin = product["zip"]
         weight = float(product["Weight"])
@@ -253,5 +253,6 @@ if submitted:
         else:
             st.error("Failed to get FedEx access token.")
 
-    except KeyError:
+    if product is None:
         st.error(f"Product number '{product_number}' not found in product catalog.")
+    else:
