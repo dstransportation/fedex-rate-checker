@@ -232,7 +232,7 @@ if submitted:
                 if rates:
                     st.success("Here are the available list rates:")
                     df = pd.DataFrame(rates)
-                    df["Numeric"] = df["Marked Up Rate"].str.extract(r'(\d+\.\d+)').astype(float)
+                    df["Numeric"] = df["DS Rate"].str.extract(r'(\d+\.\d+)').astype(float)
                     df = df.sort_values(by="Numeric").drop(columns="Numeric")
                     st.table(df[["Service", "List Rate", "DS Rate", "Estimated Delivery"]].set_index("Service"))
                 else:
