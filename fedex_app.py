@@ -257,4 +257,3 @@ if submitted:
 
     if product is None:
         st.error(f"Product number '{product_number}' not found in product catalog.")
-    else:
